@@ -1,0 +1,43 @@
+# Data — never commit
+data/raw/
+data/processed/
+tableau/data/!tableau/data/*.csv
+*.parquet
+*.csv
+
+# Models — regenerable; some are large
+models/
+*.pkl
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Environments
+.env
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tableau backups
+*.twbx.bak
+~$*
+
+# Build artifacts from this conversation
+outputs/
+build_doc.js
+*.log
+
+# Re-include the Tableau input CSVs
+!tableau/data/*.csv
