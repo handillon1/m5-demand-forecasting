@@ -38,6 +38,3 @@ desktop.ini
 outputs/
 build_doc.js
 *.log
-
-# Re-include the Tableau input CSVs
-!tableau/data/*.csv
