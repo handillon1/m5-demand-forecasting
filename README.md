@@ -8,7 +8,9 @@
 
 ## TL;DR
 
-Built an end-to-end retail demand-forecasting solution on the M5 dataset (3,049 SKUs × 10 stores × 1,913 days = 59M sales rows). A LightGBM forecaster with Tweedie objective beats a seasonal-naive baseline by **25.6% on RMSE** (MAE 1.28 → 1.05), and a **pre-registered simulated A/B test** demonstrates a statistically significant **+$12.08/SKU/day lift in cost-adjusted gross margin** (p=0.032, 95% CI $1.77–$23.42).
+Built an end-to-end retail demand-forecasting solution on the M5 dataset (3,049 products × 10 stores × 1,941 days = 59M sales rows). A LightGBM forecaster with Tweedie objective beats a seasonal-naive baseline by **25.6% on RMSE** (MAE 1.28 → 1.05), and a **pre-registered simulated A/B test** found a **+$12.08/SKU/day lift in cost-adjusted gross margin** (+31.9%, p=0.032, 95% CI $1.77–$23.42). The lift holds under the main cost assumptions but not under every alternative (see Methodology).
+
+![A/B test: margin per SKU by arm](docs/img/08_ab_box.png)
 
 Recommended action in the [PM memo](docs/PM_memo.md): phased rollout starting with Foods, gated by a confirmation experiment at n=400/arm.
 
@@ -33,7 +35,6 @@ Recommended action in the [PM memo](docs/PM_memo.md): phased rollout starting wi
 | [`docs/experiment_design.md`](docs/experiment_design.md) | Pre-registered A/B test plan + post-script documenting what was actually run. |
 | [`docs/model_card.md`](docs/model_card.md) | Full model technical detail: training data, architecture, performance, failure modes, ethics. |
 | [`docs/PM_memo.md`](docs/PM_memo.md) | 1-page executive memo with rollout recommendation. |
-| [`docs/resume_bullets.md`](docs/resume_bullets.md) | Role-targeted resume bullets (DS-PM, DS/ML, Analytics). |
 
 ---
 
@@ -59,7 +60,8 @@ m5-demand-forecasting/
 │   ├── 01_eda.ipynb              ← 5 EDA charts + "what a PM should know"
 │   ├── 02_baseline_models.ipynb  ← Seasonal-naive baseline
 │   ├── 03_lightgbm_forecast.ipynb ← Training + recursive prediction + RMSE/MAE/bias
-│   └── 04_ab_test_analysis.ipynb ← Pre-registered A/B test analysis
+│   ├── 04_ab_test_analytics.ipynb ← Pre-registered A/B test analysis
+│   └── 05_quantile_forecasts.ipynb ← Quantile (probabilistic) forecasts
 ├── tableau/
 │   └── data/                     ← CSV inputs for the dashboard
 │   
@@ -68,7 +70,6 @@ m5-demand-forecasting/
     ├── experiment_design.md
     ├── model_card.md
     ├── PM_memo.md
-    ├── resume_bullets.md
     └── img/                      ← EDA charts and feature-importance plot
 ```
 
@@ -79,7 +80,7 @@ m5-demand-forecasting/
 ### Prerequisites
 
 - Python 3.11 (Anaconda recommended)
-- PostgreSQL 15+ running locally (database name `m5db`)
+- PostgreSQL 15+ running locally (database name `demand_forecasting`)
 - Tableau Public Desktop (free, optional — only needed to edit the dashboard)
 - Kaggle account to download the M5 dataset (~450 MB)
 
@@ -97,24 +98,28 @@ conda activate m5
 # 3. Download M5 data
 # Visit https://www.kaggle.com/competitions/m5-forecasting-accuracy/data
 # Place these into data/raw/:
-#   - sales_train_validation.csv  (or sales_train_evaluation.csv)
+#   - sales_train_evaluation.csv
 #   - calendar.csv
 #   - sell_prices.csv
 
 # 4. Create the Postgres database
-psql -U postgres -c "CREATE DATABASE m5db;"
+psql -U postgres -c "CREATE DATABASE demand_forecasting;"
+
+# 5. Set your Postgres password for the notebooks
+export PG_PASSWORD=your_postgres_password   # Windows PowerShell: $env:PG_PASSWORD="..."
 ```
 
 ### Run the pipeline
 
 ```bash
 # Phase 1: Build the warehouse
-psql -U postgres -d m5db -f sql/01_create_schema.sql
-jupyter notebook notebooks/00_load_raw.ipynb       # runs the Python loader
-psql -U postgres -d m5db -f sql/03_dimensions.sql
-psql -U postgres -d m5db -f sql/04_fact_sales.sql
-psql -U postgres -d m5db -f sql/05_views_features.sql
-psql -U postgres -d m5db -f sql/06_qa_checks.sql
+psql -U postgres -d demand_forecasting -f sql/01_create_schema.sql
+# Load calendar.csv and sell_prices.csv into m5.raw_calendar and m5.raw_prices
+# (e.g. pgAdmin's Import tool or psql's \copy), then load and melt the sales file:
+jupyter notebook notebooks/00_load_raw.ipynb       # melts sales and bulk-loads it with COPY
+psql -U postgres -d demand_forecasting -f sql/02_dimensions.sql
+psql -U postgres -d demand_forecasting -f sql/03_fact_sales.sql
+psql -U postgres -d demand_forecasting -f sql/04_views_features.sql
 
 # Phase 2: EDA
 jupyter notebook notebooks/01_eda.ipynb
@@ -124,7 +129,10 @@ jupyter notebook notebooks/02_baseline_models.ipynb
 jupyter notebook notebooks/03_lightgbm_forecast.ipynb
 
 # Phase 4: A/B test
-jupyter notebook notebooks/04_ab_test_analysis.ipynb
+jupyter notebook notebooks/04_ab_test_analytics.ipynb
+
+# Extension: quantile forecasts
+jupyter notebook notebooks/05_quantile_forecasts.ipynb
 ```
 
 Each notebook runs top to bottom from a fresh kernel and uses parquet caches to keep re-runs fast.
@@ -133,7 +141,7 @@ Each notebook runs top to bottom from a fresh kernel and uses parquet caches to 
 
 ## Methodology highlights
 
-- **PostgreSQL bulk loading via `COPY`** is 5–10× faster than ORM-based `to_sql` for the 60M-row sales fact table. Wide-format CSV (1,913 daily columns) is melted in pandas first because Postgres caps tables at 1,600 columns.
+- **PostgreSQL bulk loading via `COPY`** is 5–10× faster than ORM-based `to_sql` for the 59M-row sales fact table. Wide-format CSV (1,941 daily columns) is melted in pandas first because Postgres caps tables at 1,600 columns.
 - **Recursive 28-day prediction** uses the model's own outputs to update lag features each day. Day-28 forecasts are built entirely from model-generated lag values — error compounds across the horizon and is one of the known failure modes documented in the [model card](docs/model_card.md).
 - **Tweedie objective** in LightGBM handles M5's heavy zero-inflation (73% of (SKU, day) cells have zero sales). Standard regression loss would bias the forecast toward over-prediction on slow movers.
 - **Pre-registered A/B test** locks in the hypothesis, KPI formula, sample size, alpha, and decision rule *before* unblinding results. The [experiment design doc](docs/experiment_design.md) includes a post-script with deviations from the plan and which supplementary analyses were run, in keeping with experimentation best practice.
@@ -153,7 +161,7 @@ Each notebook runs top to bottom from a fresh kernel and uses parquet caches to 
 2. **Confirmation A/B test at n=400 per arm** before any production deployment. Current test had only 58% observed power; the recommended confirmation size is informed by post-hoc power analysis.
 3. **Hierarchical reconciliation (MinT)** so store-level forecasts sum cleanly to state and total — required for top-down inventory rollups.
 4. **Cold-start handling** via item-similarity embeddings derived from `dept_id` × `cat_id` × launch-week peers. Out of scope for v1.
-5. **MLflow tracking** wrapped around `src/train.py` for experiment versioning.
+5. **MLflow tracking** around model training for experiment versioning.
 6. **Refactor `notebooks/` → `src/` modules** (`features.py`, `train.py`, `evaluate.py`, `ab_test.py`) for a production-style codebase.
 
 ---
