@@ -23,13 +23,13 @@ Reduce forecast error (RMSE) on the held-out test window by **≥10%** vs. a sea
 
 ## Success metrics
 
-- **Primary:** RMSE on the held-out test window (d_1886–d_1913, 2016-04-25 → 2016-05-22). See note below on the test-window choice.
+- **Primary:** RMSE on the held-out test window (d_1914–d_1941, 2016-04-25 → 2016-05-22). See note below on the test window.
 - **Secondary:** simulated cost-adjusted gross-margin lift in A/B test (Phase 4).
 - **Guardrail:** forecast bias within ±3%.
 
 ### Note on the test window
 
-The canonical M5 evaluation window is d_1914–d_1941. Our local copy of the dataset is `sales_train_validation.csv` (1,913 days), which omits those 28 days. We therefore use the most recent 28 days of available data (d_1886–d_1913, 2016-04-25 → 2016-05-22) as the held-out test window. This substitution is methodologically standard when the canonical evaluation period is unavailable; results are not directly comparable to the M5 Kaggle leaderboard but are internally consistent.
+The test window is the canonical M5 evaluation period (d_1914–d_1941, 2016-04-25 → 2016-05-22), taken from `sales_train_evaluation.csv` (1,941 days). The 28 days before it (d_1886–d_1913) are the validation window. Results use RMSE/MAE rather than the competition's WRMSSE metric, so they are not directly comparable to the M5 Kaggle leaderboard but are internally consistent.
 
 ## Phase 3 results (recorded for the record)
 

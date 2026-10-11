@@ -31,10 +31,10 @@ Daily unit-sales forecasting for **3,049 Walmart SKUs across 10 stores** in CA, 
 | Granularity | (item × store × day) |
 | Training window | 2013-07-17 → 2016-03-27 (~2.7 years) |
 | Validation window | 2016-03-28 → 2016-04-24 (28 days) |
-| Test window | 2016-04-25 → 2016-05-22 (28 days, d_1886–d_1913) |
+| Test window | 2016-04-25 → 2016-05-22 (28 days, d_1914–d_1941) |
 | Training rows | ~31.7M |
 
-**Note on the test window.** The canonical M5 evaluation period is d_1914–d_1941. Our local copy of the dataset is `sales_train_validation.csv` (1,913 days), which does not include those days, so we use the most recent 28 days available (d_1886–d_1913) as the held-out test. Documented transparently in the PRD.
+**Note on the test window.** The test window is the canonical M5 evaluation period (d_1914–d_1941, 2016-04-25 → 2016-05-22), taken from `sales_train_evaluation.csv` (1,941 days). The 28 days before it (d_1886–d_1913) are the validation window. Results use RMSE/MAE rather than the competition's WRMSSE metric, so they are not directly comparable to the M5 Kaggle leaderboard but are internally consistent.
 
 ---
 
